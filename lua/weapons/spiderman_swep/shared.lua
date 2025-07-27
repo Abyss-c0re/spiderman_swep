@@ -249,6 +249,7 @@ function SWEP:StartPullProp()
     self.IsSwinging = false
     self.RopeEndPos = nil
     if ent:IsNPC() then ent = SpawnPickupRagdoll(ent) end
+    ent.collision_group = ent:GetCollisionGroup()
     ent:SetCollisionGroup(COLLISION_GROUP_PASSABLE_DOOR)
     self.PullTarget = ent
     self:EmitSound("physics/flesh/flesh_impact_bullet" .. math.random(1, 5) .. ".wav")
@@ -295,6 +296,7 @@ function SWEP:EndPullProp()
             hook.Remove("EntityTakeDamage", "VRMod_ForwardRagdollDamage")
         end
 
+        timer.Simple(1.0, function() if IsValid(ent) then ent:SetCollisionGroup(ent.collision_group) end end)
         self.PullTarget = nil
         self:EmitSound("physics/flesh/flesh_squishy_impact_hard" .. math.random(1, 4) .. ".wav")
         net.Start("SpiderRope_Clear")
