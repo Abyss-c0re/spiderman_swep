@@ -196,7 +196,7 @@ function SWEP:DoTrace()
     local ply = self:GetOwner()
     return util.TraceLine({
         start = ply:GetShootPos(),
-        endpos = ply:GetShootPos() + ply:GetAimVector() * 10000,
+        endpos = ply:GetShootPos() + ply:GetAimVector() * 32768,
         filter = ply
     })
 end
@@ -243,19 +243,20 @@ function SWEP:StartPullProp()
     if not SERVER or self.IsPullingProp then return end
     local tr = self:DoTrace()
     local ent = tr.Entity
+    if ent:IsNPC() then ent = SpawnPickupRagdoll(ent) end
     local phys = IsValid(ent) and ent:GetPhysicsObject()
     if not tr.Hit or not IsValid(ent) or not IsValid(phys) or not phys:IsMoveable() then return end
     self.IsPullingProp = true
     self.IsSwinging = false
-    self.RopeEndPos = nil
-    if ent:IsNPC() then ent = SpawnPickupRagdoll(ent) end
+    self.RopeEndPos = tr.HitPos
+    
     ent.collision_group = ent:GetCollisionGroup()
     ent:SetCollisionGroup(COLLISION_GROUP_PASSABLE_DOOR)
     self.PullTarget = ent
     self:EmitSound("physics/flesh/flesh_impact_bullet" .. math.random(1, 5) .. ".wav")
     net.Start("SpiderRope_HitPos")
     net.WriteBool(false)
-    net.WriteVector(vector_origin)
+    net.WriteVector(tr.HitPos)
     net.WriteEntity(ent)
     net.Broadcast()
 end
@@ -293,7 +294,7 @@ function SWEP:EndPullProp()
                 ent.dropped_manually = false
             end
 
-            hook.Remove("EntityTakeDamage", "VRMod_ForwardRagdollDamage")
+            hook.Remove("EntityTakeDamage", "ForwardRagdollDamage")
         end
 
         timer.Simple(1.0, function() if IsValid(ent) then ent:SetCollisionGroup(ent.collision_group) end end)
