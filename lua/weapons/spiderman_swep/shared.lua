@@ -163,16 +163,12 @@ function SWEP:Initialize()
 end
 
 function SWEP:Holster()
-    hook.Remove("EntityTakeDamage", "ForwardRagdollDamage_" .. self:EntIndex())
-    hook.Remove("PostDrawOpaqueRenderables", "DrawSpiderRopeBeam_" .. self:EntIndex())
     self:EndSwing()
     self:EndPullProp()
     return true
 end
 
 function SWEP:OnRemove()
-    hook.Remove("EntityTakeDamage", "ForwardRagdollDamage_" .. self:EntIndex())
-    hook.Remove("PostDrawOpaqueRenderables", "DrawSpiderRopeBeam_" .. self:EntIndex())
     self:EndSwing()
     self:EndPullProp()
 end
