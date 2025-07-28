@@ -158,16 +158,21 @@ function SWEP:Initialize()
     self:SetHoldType("pistol")
     self.IsSwinging = false
     self.IsPullingProp = false
+    self.SwingStartTime = 0
     self.RopeEndPos = nil
 end
 
 function SWEP:Holster()
+    hook.Remove("EntityTakeDamage", "ForwardRagdollDamage_" .. self:EntIndex())
+    hook.Remove("PostDrawOpaqueRenderables", "DrawSpiderRopeBeam_" .. self:EntIndex())
     self:EndSwing()
     self:EndPullProp()
     return true
 end
 
 function SWEP:OnRemove()
+    hook.Remove("EntityTakeDamage", "ForwardRagdollDamage_" .. self:EntIndex())
+    hook.Remove("PostDrawOpaqueRenderables", "DrawSpiderRopeBeam_" .. self:EntIndex())
     self:EndSwing()
     self:EndPullProp()
 end
@@ -208,6 +213,7 @@ function SWEP:StartSwing()
     self.IsSwinging = true
     self.IsPullingProp = false
     self.RopeEndPos = tr.HitPos
+    self.SwingStartTime = CurTime()
     self:EmitSound("physics/plastic/plastic_box_impact_soft" .. math.random(1, 4) .. ".wav")
     net.Start("SpiderRope_HitPos")
     net.WriteBool(true) -- swing
@@ -224,7 +230,9 @@ function SWEP:ApplyPull()
     local dist = pos:Distance(self.RopeEndPos)
     local speed = GetConVar("spiderman_web_speed"):GetFloat()
     local strength = math.Clamp(dist / 1500, 0.8, 1.5)
-    local force = dir * speed * strength
+    local timeSinceStart = math.max(0, CurTime() - (self.SwingStartTime or 0))
+    local timeMultiplier = math.Clamp(timeSinceStart / 1.5, 0.2, 1.0) -- ramp up over 1.5s
+    local force = dir * speed * strength * timeMultiplier
     force.z = force.z + math.abs(GetConVar("sv_gravity"):GetFloat()) * 0.2
     ply:SetVelocity(force - ply:GetVelocity() * 0.8)
 end
@@ -249,7 +257,6 @@ function SWEP:StartPullProp()
     self.IsPullingProp = true
     self.IsSwinging = false
     self.RopeEndPos = tr.HitPos
-    
     ent.collision_group = ent:GetCollisionGroup()
     ent:SetCollisionGroup(COLLISION_GROUP_PASSABLE_DOOR)
     self.PullTarget = ent
