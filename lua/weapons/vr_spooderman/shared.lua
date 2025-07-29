@@ -83,11 +83,13 @@ end
 function SWEP:Think()
     if CLIENT then return end
     local ply = self:GetOwner()
+    local sid = ply:SteamID()
     if not IsValid(ply) then return end
     local inputs = vr_input_states[ply] or {}
     -- Right hand logic
     do
         local hand = "right"
+        local isHoldingRight = g_VR[sid] and g_VR[sid].heldItems and g_VR[sid].heldItems[2] ~= nil
         local state = self.HandStates[hand]
         local fire = inputs["boolean_primaryfire"]
         local pull = inputs["boolean_right_pickup"]
@@ -101,7 +103,7 @@ function SWEP:Think()
             self:EndSwing(hand)
         end
 
-        if not fire and pull then
+        if not fire and pull and not isHoldingRight then
             if not state.isPullingProp then
                 self:StartPullProp(hand)
             else
@@ -115,6 +117,7 @@ function SWEP:Think()
     -- Left hand logic
     do
         local hand = "left"
+        local isHoldingLeft = g_VR[sid] and g_VR[sid].heldItems and g_VR[sid].heldItems[1] ~= nil
         local state = self.HandStates[hand]
         local fire = inputs["boolean_secondaryfire"]
         local pull = inputs["boolean_left_pickup"]
@@ -128,7 +131,7 @@ function SWEP:Think()
             self:EndSwing(hand)
         end
 
-        if not fire and pull then
+        if not fire and pull and not isHoldingLeft then
             if not state.isPullingProp then
                 self:StartPullProp(hand)
             else
@@ -222,7 +225,7 @@ function SWEP:ApplyPull(hand)
         local pullDir = (handPos - ropePos):GetNormalized()
         local projected = handVel:Dot(pullDir)
         --print(hand .. " hand swing projected: " .. projected) -- debug
-        if projected > 2.5 then -- pulled hand fast enough away from wall
+        if projected > 5 then -- pulled hand fast enough away from wall
             state.hasStartedPull = true
             state.initialPullForce = projected
             state.swingStartTime = CurTime()
@@ -237,11 +240,11 @@ function SWEP:ApplyPull(hand)
     local baseSpeed = GetConVar("spiderman_web_speed"):GetFloat()
     local timeSinceStart = CurTime() - (state.swingStartTime or 0)
     local rampFactor = math.min(timeSinceStart / 0.5, 1.0)
-    local dynamicForce = dir * baseSpeed * state.initialPullForce / 10 * rampFactor
+    local dynamicForce = dir * baseSpeed * state.initialPullForce / 50 * rampFactor
     -- Add lift to counter gravity, slight boost
-    dynamicForce.z = dynamicForce.z + math.abs(GetConVar("sv_gravity"):GetFloat()) * 0.2
+    dynamicForce.z = dynamicForce.z + math.abs(GetConVar("sv_gravity"):GetFloat()) * 0.05
     -- Apply: velocity corrected to avoid stacking
-    ply:SetVelocity(dynamicForce - ply:GetVelocity() * 0.8)
+    ply:SetVelocity(dynamicForce)
 end
 
 function SWEP:EndSwing(hand)
@@ -303,7 +306,7 @@ function SWEP:ApplyPropPull(hand)
     local entPos = ent:GetPos()
     local dist = entPos:Distance(handPos)
     -- Close enough? Snap to hand
-    if dist < 30 then
+    if dist < 50 then
         local handAng = isLeft and vrmod.GetLeftHandAng(ply) or vrmod.GetRightHandAng(ply)
         local offset = handAng:Forward() * 20
         local adjustedPos = handPos + offset
@@ -364,7 +367,7 @@ function SWEP:EndPullProp(hand)
             end
         end
 
-        if IsValid(ent) then timer.Simple(1.0, function() if IsValid(ent) then ent:SetCollisionGroup(ent.collision_group or COLLISION_GROUP_NONE) end end) end
+        if IsValid(ent) then timer.Simple(0.2, function() if IsValid(ent) then ent:SetCollisionGroup(ent.collision_group or COLLISION_GROUP_NONE) end end) end
     end
 
     state.pullTarget = nil
