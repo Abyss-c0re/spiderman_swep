@@ -297,7 +297,6 @@ function SWEP:EndPullProp()
 
         timer.Simple(1.0, function() if IsValid(ent) then ent:SetCollisionGroup(ent.collision_group) end end)
         self.PullTarget = nil
-        
         self:EmitSound("physics/plastic/plastic_box_impact_soft" .. math.random(1, 4) .. ".wav")
         net.Start("SpiderRope_Clear")
         net.Broadcast()
@@ -331,22 +330,4 @@ if CLIENT then
         wep.IsPullingProp = false
         wep.PullTarget = nil
     end)
-    -- hook.Add("PostDrawOpaqueRenderables", "DrawSpiderRopeBeam", function()
-    --     local ply = LocalPlayer()
-    --     local wep = ply:GetActiveWeapon()
-    --     if not IsValid(wep) then return end
-    --     local endPos
-    --     if wep.IsSwinging and wep.RopeEndPos then
-    --         endPos = wep.RopeEndPos
-    --     elseif wep.IsPullingProp and IsValid(wep.PullTarget) then
-    --         endPos = wep.PullTarget:GetPos()
-    --     else
-    --         return
-    --     end
-    --     local vm = ply:GetViewModel()
-    --     local att = vm:GetAttachment(vm:LookupAttachment("muzzle") or 1)
-    --     if not att then return end
-    --     render.SetMaterial(Material("cable/rope"))
-    --     render.DrawBeam(att.Pos, endPos, 1, 0, 1, Color(255, 255, 255, 255))
-    -- end)
 end
