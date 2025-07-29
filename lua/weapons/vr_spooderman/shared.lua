@@ -95,9 +95,9 @@ function SWEP:Think()
         local pull = inputs["boolean_right_pickup"]
         if fire and not pull then
             if not state.isSwinging then
-                self:StartSwing(hand)
+                self:StartSwing(ply, hand)
             else
-                self:ApplyPull(hand)
+                self:ApplyPull(ply, hand)
             end
         elseif state.isSwinging then
             self:EndSwing(hand)
@@ -105,9 +105,9 @@ function SWEP:Think()
 
         if not fire and pull and not isHoldingRight then
             if not state.isPullingProp then
-                self:StartPullProp(hand)
+                self:StartPullProp(ply, hand)
             else
-                self:ApplyPropPull(hand)
+                self:ApplyPropPull(ply, hand)
             end
         elseif state.isPullingProp then
             self:EndPullProp(hand)
@@ -123,9 +123,9 @@ function SWEP:Think()
         local pull = inputs["boolean_left_pickup"]
         if fire and not pull then
             if not state.isSwinging then
-                self:StartSwing(hand)
+                self:StartSwing(ply, hand)
             else
-                self:ApplyPull(hand)
+                self:ApplyPull(ply, hand)
             end
         elseif state.isSwinging then
             self:EndSwing(hand)
@@ -133,9 +133,9 @@ function SWEP:Think()
 
         if not fire and pull and not isHoldingLeft then
             if not state.isPullingProp then
-                self:StartPullProp(hand)
+                self:StartPullProp(ply, hand)
             else
-                self:ApplyPropPull(hand)
+                self:ApplyPropPull(ply, hand)
             end
         elseif state.isPullingProp then
             self:EndPullProp(hand)
@@ -143,57 +143,15 @@ function SWEP:Think()
     end
 end
 
-local function HitFilter(ent, ply, hand)
-    if not IsValid(ent) then return true end
-    if ent == ply then return false end
-    if ent:GetNWBool("isVRHand", false) then return false end
-    if IsValid(ply) and (hand == "left" or hand == "right") then
-        local held = vrmod.GetHeldEntity(ply, hand)
-        if IsValid(held) and held == ent then return false end
-    end
-    return true
+function SWEP:DoTrace(ply, hand)
+    return vrmod.utils.TraceHand(ply, hand)
 end
 
-function SWEP:DoTrace(hand)
-    if CLIENT then return end
-    local ply = self:GetOwner()
-    local startPos, ang, dir
-    if hand == "left" then
-        startPos = vrmod.GetLeftHandPos(ply)
-        ang = vrmod.GetLeftHandAng(ply)
-        local ang2 = Angle(ang.p, ang.y, ang.r + 180)
-        dir = ang2:Forward()
-    else
-        startPos = vrmod.GetRightHandPos(ply)
-        ang = vrmod.GetRightHandAng(ply)
-        dir = ang:Forward()
-    end
-
-    local ignore = {}
-    local maxDepth = 10
-    for i = 1, maxDepth do
-        local tr = util.TraceLine({
-            start = startPos,
-            endpos = startPos + dir * 32768,
-            filter = ignore
-        })
-
-        if not tr.Entity or not IsValid(tr.Entity) then return tr end
-        if HitFilter(tr.Entity, ply, hand) then
-            return tr
-        else
-            table.insert(ignore, tr.Entity)
-            startPos = tr.HitPos + dir * 1 -- Avoid infinite loops on same surface
-        end
-    end
-    return nil -- Nothing valid hit after maxDepth
-end
-
-function SWEP:StartSwing(hand)
+function SWEP:StartSwing(ply, hand)
     if not SERVER then return end
     local state = self.HandStates[hand]
     if state.isSwinging then return end
-    local tr = self:DoTrace(hand)
+    local tr = self:DoTrace(ply, hand)
     if not tr.Hit then return end
     -- local targetName = IsValid(tr.Entity) and (tr.Entity:GetName() ~= "" and tr.Entity:GetName() or tr.Entity:GetClass()) or "World"
     -- print(hand .. " hit " .. targetName)
@@ -211,7 +169,7 @@ function SWEP:StartSwing(hand)
     net.Broadcast()
 end
 
-function SWEP:ApplyPull(hand)
+function SWEP:ApplyPull(ply, hand)
     if not SERVER then return end
     local state = self.HandStates[hand]
     if not state or not state.isSwinging or not state.ropeEndPos then return end
@@ -262,11 +220,11 @@ function SWEP:EndSwing(hand)
     net.Broadcast()
 end
 
-function SWEP:StartPullProp(hand)
+function SWEP:StartPullProp(ply, hand)
     if not SERVER then return end
     local state = self.HandStates[hand]
     if state.isPullingProp then return end
-    local tr = self:DoTrace(hand)
+    local tr = self:DoTrace(ply, hand)
     local ent = tr.Entity
     if not tr.Hit or not IsValid(ent) then return end
     if ent:IsNPC() then ent = vrmod.utils.SpawnPickupRagdoll(ent) end
@@ -288,7 +246,7 @@ function SWEP:StartPullProp(hand)
     net.Broadcast()
 end
 
-function SWEP:ApplyPropPull(hand)
+function SWEP:ApplyPropPull(ply, hand)
     if not SERVER then return end
     local state = self.HandStates[hand]
     local ent = state.pullTarget
@@ -299,7 +257,7 @@ function SWEP:ApplyPropPull(hand)
         return
     end
 
-    local ply = self:GetOwner()
+    --local ply = self:GetOwner()
     local isLeft = hand == "left"
     local handPos = isLeft and vrmod.GetLeftHandPos(ply) or vrmod.GetRightHandPos(ply)
     local handVel = isLeft and vrmod.GetLeftHandVelocity(ply) or vrmod.GetRightHandVelocity(ply)
