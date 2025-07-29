@@ -201,7 +201,7 @@ function SWEP:ApplyPull(ply, hand)
     local toRopeDir = (ropePos - playerPos):GetNormalized()
     local blendWeight = 0.6
     local pullDir = (toRopeDir * (1 - blendWeight) + handFwd * blendWeight):GetNormalized()
-    local baseSpeed = GetConVar("spiderman_web_speed"):GetFloat()
+    local baseSpeed = GetConVar("spiderman_web_speed_vr"):GetFloat()
     local elapsed = CurTime() - (state.swingStartTime or 0)
     local ramp = math.min(elapsed / 0.5, 1.0)
     local force = pullDir * baseSpeed * state.initialPullForce / 50 * ramp
@@ -316,7 +316,7 @@ function SWEP:ApplyPropPull(ply, hand)
     local blendWeight = 0.6
     local aimInfluence = math.Clamp(dirToHand:Dot(handFwd), 0, 1)
     local pullDir = (dirToHand * (1 - blendWeight) + handFwd * blendWeight * aimInfluence):GetNormalized()
-    local baseSpeed = GetConVar("spiderman_web_speed"):GetFloat()
+    local baseSpeed = GetConVar("spiderman_web_speed_vr"):GetFloat()
     local timeSinceStart = CurTime() - (state.pullStartTime or 0)
     local ramp = math.min(timeSinceStart / 0.5, 1.0)
     local forceMag = baseSpeed * state.initialPullForce / 10 * ramp
