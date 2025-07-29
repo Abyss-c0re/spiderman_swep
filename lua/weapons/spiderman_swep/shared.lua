@@ -1,10 +1,4 @@
-if SERVER then
-    AddCSLuaFile()
-    CreateConVar("spiderman_web_speed", "666", FCVAR_ARCHIVE + FCVAR_REPLICATED, "Web pull speed", 100, 3000)
-    util.AddNetworkString("SpiderRope_HitPos")
-    util.AddNetworkString("SpiderRope_Clear")
-end
-
+if SERVER then AddCSLuaFile() end
 SWEP.Author = "Doom Slayer"
 SWEP.Purpose = "Swing like Spider-Man!"
 SWEP.Instructions = "Left-click to swing. Right-click to pull props/NPCs."
@@ -281,7 +275,8 @@ function SWEP:ApplyPropPull()
     local speed = GetConVar("spiderman_web_speed"):GetFloat()
     local strength = math.Clamp(dist / 1500, 0.8, 1.5)
     local force = dir * speed * strength
-    phys:ApplyForceCenter(force)
+    local upwardLift = Vector(0, 0, math.Clamp(dist * 0.1, 64, 256))
+    phys:ApplyForceCenter(force + upwardLift)
 end
 
 function SWEP:EndPullProp()
@@ -335,24 +330,22 @@ if CLIENT then
         wep.IsPullingProp = false
         wep.PullTarget = nil
     end)
-
-    hook.Add("PostDrawOpaqueRenderables", "DrawSpiderRopeBeam", function()
-        local ply = LocalPlayer()
-        local wep = ply:GetActiveWeapon()
-        if not IsValid(wep) then return end
-        local endPos
-        if wep.IsSwinging and wep.RopeEndPos then
-            endPos = wep.RopeEndPos
-        elseif wep.IsPullingProp and IsValid(wep.PullTarget) then
-            endPos = wep.PullTarget:GetPos()
-        else
-            return
-        end
-
-        local vm = ply:GetViewModel()
-        local att = vm:GetAttachment(vm:LookupAttachment("muzzle") or 1)
-        if not att then return end
-        render.SetMaterial(Material("cable/rope"))
-        render.DrawBeam(att.Pos, endPos, 1, 0, 1, Color(255, 255, 255, 255))
-    end)
+    -- hook.Add("PostDrawOpaqueRenderables", "DrawSpiderRopeBeam", function()
+    --     local ply = LocalPlayer()
+    --     local wep = ply:GetActiveWeapon()
+    --     if not IsValid(wep) then return end
+    --     local endPos
+    --     if wep.IsSwinging and wep.RopeEndPos then
+    --         endPos = wep.RopeEndPos
+    --     elseif wep.IsPullingProp and IsValid(wep.PullTarget) then
+    --         endPos = wep.PullTarget:GetPos()
+    --     else
+    --         return
+    --     end
+    --     local vm = ply:GetViewModel()
+    --     local att = vm:GetAttachment(vm:LookupAttachment("muzzle") or 1)
+    --     if not att then return end
+    --     render.SetMaterial(Material("cable/rope"))
+    --     render.DrawBeam(att.Pos, endPos, 1, 0, 1, Color(255, 255, 255, 255))
+    -- end)
 end
