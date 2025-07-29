@@ -173,17 +173,21 @@ function SWEP:ApplyPull(ply, hand)
     if not SERVER then return end
     local state = self.HandStates[hand]
     if not state or not state.isSwinging or not state.ropeEndPos then return end
-    local ply = self:GetOwner()
     local isLeft = hand == "left"
     local handPos = isLeft and vrmod.GetLeftHandPos(ply) or vrmod.GetRightHandPos(ply)
     local handVel = isLeft and vrmod.GetLeftHandVelocityRelative(ply) or vrmod.GetRightHandVelocityRelative(ply)
+    local ang = isLeft and vrmod.GetLeftHandAng(ply) or vrmod.GetRightHandAng(ply)
+    if isLeft then
+        ang = Angle(ang.p, ang.y, ang.r + 180) -- match TraceHand compensation
+    end
+
+    local handFwd = ang:Forward()
     local ropePos = state.ropeEndPos
     -- Step 1: Wait for pull gesture
     if not state.hasStartedPull then
         local pullDir = (handPos - ropePos):GetNormalized()
         local projected = handVel:Dot(pullDir)
-        --print(hand .. " hand swing projected: " .. projected) -- debug
-        if projected > 5 then -- pulled hand fast enough away from wall
+        if projected > 5 then
             state.hasStartedPull = true
             state.initialPullForce = projected
             state.swingStartTime = CurTime()
@@ -192,17 +196,27 @@ function SWEP:ApplyPull(ply, hand)
         end
     end
 
-    -- Step 2: Pull has started, apply force
-    local playerPos = ply:GetPos() + Vector(0, 0, 36) -- eye-level
-    local dir = (ropePos - playerPos):GetNormalized()
+    -- Step 2: Apply force with corrected angle and adaptive vertical lift
+    local playerPos = ply:GetPos() + Vector(0, 0, 36) -- eye height
+    local toRopeDir = (ropePos - playerPos):GetNormalized()
+    local blendWeight = 0.6
+    local pullDir = (toRopeDir * (1 - blendWeight) + handFwd * blendWeight):GetNormalized()
     local baseSpeed = GetConVar("spiderman_web_speed"):GetFloat()
-    local timeSinceStart = CurTime() - (state.swingStartTime or 0)
-    local rampFactor = math.min(timeSinceStart / 0.5, 1.0)
-    local dynamicForce = dir * baseSpeed * state.initialPullForce / 50 * rampFactor
-    -- Add lift to counter gravity, slight boost
-    dynamicForce.z = dynamicForce.z + math.abs(GetConVar("sv_gravity"):GetFloat()) * 0.05
-    -- Apply: velocity corrected to avoid stacking
-    ply:SetVelocity(dynamicForce)
+    local elapsed = CurTime() - (state.swingStartTime or 0)
+    local ramp = math.min(elapsed / 0.5, 1.0)
+    local force = pullDir * baseSpeed * state.initialPullForce / 50 * ramp
+    -- Add adaptive vertical lift if player is near ground and vertical force is weak
+    local minLiftHeight = 50
+    if ply:OnGround() and ply:GetPos().z < minLiftHeight and force.z < 20 then
+        ply:DoAnimationEvent(ACT_HL2MP_JUMP)
+        ply:SetGroundEntity(NULL)
+        local jumpVel = Vector(0, 0, 250)
+        local vel = ply:GetVelocity()
+        vel.z = jumpVel.z
+        ply:SetVelocity(vel)
+    end
+
+    ply:SetVelocity(force)
 end
 
 function SWEP:EndSwing(hand)
@@ -257,16 +271,16 @@ function SWEP:ApplyPropPull(ply, hand)
         return
     end
 
-    --local ply = self:GetOwner()
     local isLeft = hand == "left"
     local handPos = isLeft and vrmod.GetLeftHandPos(ply) or vrmod.GetRightHandPos(ply)
     local handVel = isLeft and vrmod.GetLeftHandVelocity(ply) or vrmod.GetRightHandVelocity(ply)
     local entPos = ent:GetPos()
     local dist = entPos:Distance(handPos)
-    -- Close enough? Snap to hand
+    -- Close enough: snap it to hand
     if dist < 50 then
         local handAng = isLeft and vrmod.GetLeftHandAng(ply) or vrmod.GetRightHandAng(ply)
-        local offset = handAng:Forward() * 20
+        if isLeft then handAng = Angle(handAng.p, handAng.y, handAng.r + 180) end
+        local offset = handAng:Forward() * 25
         local adjustedPos = handPos + offset
         ent:SetPos(adjustedPos)
         phys:SetVelocityInstantaneous(Vector(0, 0, 0))
@@ -281,28 +295,33 @@ function SWEP:ApplyPropPull(ply, hand)
         return
     end
 
-    -- If not started, wait for pull gesture
+    -- Step 1: Gesture detection
     if not state.hasStartedPull then
         local pullDir = (handPos - entPos):GetNormalized()
         local projected = handVel:Dot(pullDir)
-        --print(hand .. " hand projected: " .. projected) -- positive = pulling away from prop
-        if projected > 10 then -- Player pulled hand away fast enough
+        if projected > 10 then
             state.hasStartedPull = true
             state.initialPullForce = projected
             state.pullStartTime = CurTime()
         else
-            return -- not pulling yet
+            return
         end
     end
 
-    -- Pull has started, compute force
-    local timeSinceStart = CurTime() - (state.pullStartTime or 0)
-    local rampFactor = math.min(timeSinceStart / 0.5, 1) -- ramp up over 0.5s
-    local dir = (handPos - entPos):GetNormalized()
+    -- Step 2: Compute force with hand angle influence
+    local handAng = isLeft and vrmod.GetLeftHandAng(ply) or vrmod.GetRightHandAng(ply)
+    if isLeft then handAng = Angle(handAng.p, handAng.y, handAng.r + 180) end
+    local handFwd = handAng:Forward()
+    local dirToHand = (handPos - entPos):GetNormalized()
+    local blendWeight = 0.6
+    local aimInfluence = math.Clamp(dirToHand:Dot(handFwd), 0, 1)
+    local pullDir = (dirToHand * (1 - blendWeight) + handFwd * blendWeight * aimInfluence):GetNormalized()
     local baseSpeed = GetConVar("spiderman_web_speed"):GetFloat()
-    local dynamicForce = dir * baseSpeed * state.initialPullForce / 10 * rampFactor
-    local upwardLift = Vector(0, 0, math.Clamp(dist * 0.1, 64, 256))
-    phys:ApplyForceCenter(dynamicForce + upwardLift)
+    local timeSinceStart = CurTime() - (state.pullStartTime or 0)
+    local ramp = math.min(timeSinceStart / 0.5, 1.0)
+    local forceMag = baseSpeed * state.initialPullForce / 10 * ramp
+    local dynamicForce = pullDir * forceMag
+    phys:ApplyForceCenter(dynamicForce)
 end
 
 function SWEP:EndPullProp(hand)

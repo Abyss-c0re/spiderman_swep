@@ -1,6 +1,6 @@
 if SERVER then
     AddCSLuaFile()
-    CreateConVar("spiderman_web_speed", "999", FCVAR_ARCHIVE + FCVAR_REPLICATED, "Web pull speed", 100, 3000)
+    CreateConVar("spiderman_web_speed", "100", FCVAR_ARCHIVE + FCVAR_REPLICATED, "Web pull speed", 100, 3000)
     util.AddNetworkString("SpiderRope_HitPos")
     util.AddNetworkString("SpiderRope_Clear")
     util.AddNetworkString("VR_SpiderRope_HitPos")
