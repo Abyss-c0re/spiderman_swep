@@ -14,9 +14,9 @@ end
 
 SWEP.Author = "Doom Slayer"
 SWEP.Purpose = "Swing like Spider-Man!"
-SWEP.Instructions = "Left-click to swing. Right-click to pull props/NPCs."
-SWEP.Category = "Spider-Man"
-SWEP.PrintName = "VR:Spiderman Web Gun"
+SWEP.Instructions = "Trigger to swing. Grab to pull props/NPCs."
+SWEP.Category = "Spooderman"
+SWEP.PrintName = "VR Spooderman"
 SWEP.Spawnable = true
 SWEP.AdminOnly = false
 SWEP.UseHands = true
@@ -44,6 +44,9 @@ function SWEP:Initialize()
         left = {
             isSwinging = false,
             isPullingProp = false,
+            hasStartedPull = false,
+            initialPullForce = nil,
+            pullStartTime = nil,
             ropeEndPos = nil,
             swingStartTime = 0,
             pullTarget = nil
@@ -51,6 +54,9 @@ function SWEP:Initialize()
         right = {
             isSwinging = false,
             isPullingProp = false,
+            hasStartedPull = false,
+            initialPullForce = nil,
+            pullStartTime = nil,
             ropeEndPos = nil,
             swingStartTime = 0,
             pullTarget = nil
@@ -95,7 +101,7 @@ function SWEP:Think()
             self:EndSwing(hand)
         end
 
-        if fire and pull then
+        if not fire and pull then
             if not state.isPullingProp then
                 self:StartPullProp(hand)
             else
@@ -122,7 +128,7 @@ function SWEP:Think()
             self:EndSwing(hand)
         end
 
-        if fire and pull then
+        if not fire and pull then
             if not state.isPullingProp then
                 self:StartPullProp(hand)
             else
@@ -193,7 +199,7 @@ function SWEP:StartSwing(hand)
     state.ropeEndPos = tr.HitPos
     state.swingStartTime = CurTime()
     state.pullTarget = nil
-    self:EmitSound("physics/plastic/plastic_box_impact_soft" .. math.random(1, 4) .. ".wav")
+    self:EmitSound("physics/flesh/flesh_impact_bullet" .. math.random(1, 5) .. ".wav")
     net.Start("VR_SpiderRope_HitPos")
     net.WriteString(hand)
     net.WriteBool(true)
@@ -207,16 +213,35 @@ function SWEP:ApplyPull(hand)
     local state = self.HandStates[hand]
     if not state or not state.isSwinging or not state.ropeEndPos then return end
     local ply = self:GetOwner()
-    local pos = ply:GetPos() + Vector(0, 0, 36)
-    local dir = (state.ropeEndPos - pos):GetNormalized()
-    local dist = pos:Distance(state.ropeEndPos)
-    local speed = GetConVar("spiderman_web_speed"):GetFloat()
-    local strength = math.Clamp(dist / 1500, 0.8, 1.5)
-    local timeSinceStart = math.max(0, CurTime() - (state.swingStartTime or 0))
-    local timeMultiplier = math.Clamp(timeSinceStart / 1.5, 0.2, 1.0)
-    local force = dir * speed * strength * timeMultiplier
-    force.z = force.z + math.abs(GetConVar("sv_gravity"):GetFloat()) * 0.2
-    ply:SetVelocity(force - ply:GetVelocity() * 0.8)
+    local isLeft = hand == "left"
+    local handPos = isLeft and vrmod.GetLeftHandPos(ply) or vrmod.GetRightHandPos(ply)
+    local handVel = isLeft and vrmod.GetLeftHandVelocityRelative(ply) or vrmod.GetRightHandVelocityRelative(ply)
+    local ropePos = state.ropeEndPos
+    -- Step 1: Wait for pull gesture
+    if not state.hasStartedPull then
+        local pullDir = (handPos - ropePos):GetNormalized()
+        local projected = handVel:Dot(pullDir)
+        --print(hand .. " hand swing projected: " .. projected) -- debug
+        if projected > 2.5 then -- pulled hand fast enough away from wall
+            state.hasStartedPull = true
+            state.initialPullForce = projected
+            state.swingStartTime = CurTime()
+        else
+            return -- wait for valid gesture
+        end
+    end
+
+    -- Step 2: Pull has started, apply force
+    local playerPos = ply:GetPos() + Vector(0, 0, 36) -- eye-level
+    local dir = (ropePos - playerPos):GetNormalized()
+    local baseSpeed = GetConVar("spiderman_web_speed"):GetFloat()
+    local timeSinceStart = CurTime() - (state.swingStartTime or 0)
+    local rampFactor = math.min(timeSinceStart / 0.5, 1.0)
+    local dynamicForce = dir * baseSpeed * state.initialPullForce / 10 * rampFactor
+    -- Add lift to counter gravity, slight boost
+    dynamicForce.z = dynamicForce.z + math.abs(GetConVar("sv_gravity"):GetFloat()) * 0.2
+    -- Apply: velocity corrected to avoid stacking
+    ply:SetVelocity(dynamicForce - ply:GetVelocity() * 0.8)
 end
 
 function SWEP:EndSwing(hand)
@@ -226,7 +251,9 @@ function SWEP:EndSwing(hand)
     state.isSwinging = false
     state.ropeEndPos = nil
     state.swingStartTime = nil
-    self:EmitSound("physics/plastic/plastic_box_impact_soft" .. math.random(1, 4) .. ".wav")
+    state.hasStartedPull = false
+    state.initialPullForce = projected
+    self:EmitSound("physics/flesh/flesh_squishy_impact_hard" .. math.random(1, 4) .. ".wav")
     net.Start("VR_SpiderRope_Clear")
     net.WriteString(hand)
     net.Broadcast()
@@ -249,7 +276,7 @@ function SWEP:StartPullProp(hand)
     state.pullTarget = ent
     ent.collision_group = ent:GetCollisionGroup()
     ent:SetCollisionGroup(COLLISION_GROUP_PASSABLE_DOOR)
-    self:EmitSound("physics/flesh/flesh_impact_bullet" .. math.random(1, 5) .. ".wav")
+    self:EmitSound("physics/plastic/plastic_box_impact_soft" .. math.random(1, 4) .. ".wav")
     net.Start("VR_SpiderRope_HitPos")
     net.WriteString(hand)
     net.WriteBool(false)
@@ -270,15 +297,51 @@ function SWEP:ApplyPropPull(hand)
     end
 
     local ply = self:GetOwner()
-    local target = ply:GetPos() + Vector(0, 0, 36)
-    local pos = ent:GetPos()
-    local dir = (target - pos):GetNormalized()
-    local dist = pos:Distance(target)
-    local speed = GetConVar("spiderman_web_speed"):GetFloat()
-    local strength = math.Clamp(dist / 1500, 0.8, 1.5)
-    local force = dir * speed * strength
+    local isLeft = hand == "left"
+    local handPos = isLeft and vrmod.GetLeftHandPos(ply) or vrmod.GetRightHandPos(ply)
+    local handVel = isLeft and vrmod.GetLeftHandVelocity(ply) or vrmod.GetRightHandVelocity(ply)
+    local entPos = ent:GetPos()
+    local dist = entPos:Distance(handPos)
+    -- Close enough? Snap to hand
+    if dist < 30 then
+        local handAng = isLeft and vrmod.GetLeftHandAng(ply) or vrmod.GetRightHandAng(ply)
+        local offset = handAng:Forward() * 20
+        local adjustedPos = handPos + offset
+        ent:SetPos(adjustedPos)
+        phys:SetVelocityInstantaneous(Vector(0, 0, 0))
+        local sid = ply:SteamID()
+        if g_VR[sid] and g_VR[sid].heldItems and not g_VR[sid].heldItems[isLeft and 1 or 2] then
+            ent:SetCollisionGroup(ent.collision_group or COLLISION_GROUP_NONE)
+            ent.picked = true
+            vrmod.Pickup(ply, isLeft, ent)
+        end
+
+        self:EndPullProp(hand)
+        return
+    end
+
+    -- If not started, wait for pull gesture
+    if not state.hasStartedPull then
+        local pullDir = (handPos - entPos):GetNormalized()
+        local projected = handVel:Dot(pullDir)
+        --print(hand .. " hand projected: " .. projected) -- positive = pulling away from prop
+        if projected > 10 then -- Player pulled hand away fast enough
+            state.hasStartedPull = true
+            state.initialPullForce = projected
+            state.pullStartTime = CurTime()
+        else
+            return -- not pulling yet
+        end
+    end
+
+    -- Pull has started, compute force
+    local timeSinceStart = CurTime() - (state.pullStartTime or 0)
+    local rampFactor = math.min(timeSinceStart / 0.5, 1) -- ramp up over 0.5s
+    local dir = (handPos - entPos):GetNormalized()
+    local baseSpeed = GetConVar("spiderman_web_speed"):GetFloat()
+    local dynamicForce = dir * baseSpeed * state.initialPullForce / 10 * rampFactor
     local upwardLift = Vector(0, 0, math.Clamp(dist * 0.1, 64, 256))
-    phys:ApplyForceCenter(force + upwardLift)
+    phys:ApplyForceCenter(dynamicForce + upwardLift)
 end
 
 function SWEP:EndPullProp(hand)
@@ -286,20 +349,26 @@ function SWEP:EndPullProp(hand)
     local state = self.HandStates[hand]
     if not state.isPullingProp then return end
     state.isPullingProp = false
+    state.hasStartedPull = false
+    state.initialPullForce = nil
+    state.pullStartTime = nil
     local ent = state.pullTarget
-    if IsValid(ent) and ent.original_npc then
-        local npc = ent.original_npc
-        if IsValid(npc) and not vrmod.utils.IsRagdollGibbed(ent) then
-            ent.dropped_manually = true
-            timer.Simple(2.0, function() if IsValid(ent) then ent:Remove() end end)
-        else
-            ent.dropped_manually = false
+    if not ent.picked then
+        if IsValid(ent) and ent.original_npc then
+            local npc = ent.original_npc
+            if IsValid(npc) and not vrmod.utils.IsRagdollGibbed(ent) then
+                ent.dropped_manually = true
+                timer.Simple(2.0, function() if IsValid(ent) then ent:Remove() end end)
+            else
+                ent.dropped_manually = false
+            end
         end
+
+        if IsValid(ent) then timer.Simple(1.0, function() if IsValid(ent) then ent:SetCollisionGroup(ent.collision_group or COLLISION_GROUP_NONE) end end) end
     end
 
-    if IsValid(ent) then timer.Simple(1.0, function() if IsValid(ent) then ent:SetCollisionGroup(ent.collision_group or COLLISION_GROUP_NONE) end end) end
     state.pullTarget = nil
-    self:EmitSound("physics/flesh/flesh_squishy_impact_hard" .. math.random(1, 4) .. ".wav")
+    self:EmitSound("physics/plastic/plastic_box_impact_soft" .. math.random(1, 4) .. ".wav")
     net.Start("VR_SpiderRope_Clear")
     net.WriteString(hand)
     net.Broadcast()
@@ -314,7 +383,7 @@ end
 if CLIENT then
     net.Receive("VR_SpiderRope_HitPos", function()
         local wep = LocalPlayer():GetActiveWeapon()
-        if not IsValid(wep) or wep:GetClass() ~= "vr_spiderman_swep" then return end
+        if not IsValid(wep) or wep:GetClass() ~= "vr_spooderman" then return end
         local hand = net.ReadString()
         local isSwing = net.ReadBool()
         local vec = net.ReadVector()
@@ -330,7 +399,7 @@ if CLIENT then
 
     net.Receive("VR_SpiderRope_Clear", function()
         local wep = LocalPlayer():GetActiveWeapon()
-        if not IsValid(wep) or wep:GetClass() ~= "vr_spiderman_swep" then return end
+        if not IsValid(wep) or wep:GetClass() ~= "vr_spooderman" then return end
         local hand = net.ReadString()
         if not hand then return end
         wep.HandStates = wep.HandStates or {}
@@ -345,7 +414,7 @@ if CLIENT then
     hook.Add("VRMod_Input", "SpiderRope_VRInput", function(action, pressed)
         local wep = LocalPlayer():GetActiveWeapon()
         if not g_VR or not g_VR.active or g_VR.menuFocus then return end
-        if not IsValid(wep) or wep:GetClass() ~= "vr_spiderman_swep" then return end
+        if not IsValid(wep) or wep:GetClass() ~= "vr_spooderman" then return end
         if not table.HasValue(inputsToSend, action) then return end
         net.Start("SpiderRope_VRInput")
         net.WriteString(action)

@@ -1,9 +1,9 @@
 if SERVER then AddCSLuaFile() end
 SWEP.Author = "Doom Slayer"
-SWEP.Purpose = "Swing like Spider-Man!"
+SWEP.Purpose = "Swing like Spooderman!"
 SWEP.Instructions = "Left-click to swing. Right-click to pull props/NPCs."
-SWEP.Category = "Spider-Man"
-SWEP.PrintName = "Spiderman Web Gun"
+SWEP.Category = "Spooderman"
+SWEP.PrintName = "Spooderman Web Gun"
 SWEP.Spawnable = true
 SWEP.AdminOnly = false
 SWEP.UseHands = true
@@ -204,7 +204,7 @@ function SWEP:StartSwing()
     self.IsPullingProp = false
     self.RopeEndPos = tr.HitPos
     self.SwingStartTime = CurTime()
-    self:EmitSound("physics/plastic/plastic_box_impact_soft" .. math.random(1, 4) .. ".wav")
+    self:EmitSound("physics/flesh/flesh_impact_bullet" .. math.random(1, 5) .. ".wav")
     net.Start("SpiderRope_HitPos")
     net.WriteBool(true) -- swing
     net.WriteVector(tr.HitPos)
@@ -231,7 +231,7 @@ function SWEP:EndSwing()
     if SERVER and self.IsSwinging then
         self.IsSwinging = false
         self.RopeEndPos = nil
-        self:EmitSound("physics/plastic/plastic_box_impact_soft" .. math.random(1, 4) .. ".wav")
+        self:EmitSound("physics/flesh/flesh_squishy_impact_hard" .. math.random(1, 4) .. ".wav")
         net.Start("SpiderRope_Clear")
         net.Broadcast()
     end
@@ -250,7 +250,7 @@ function SWEP:StartPullProp()
     ent.collision_group = ent:GetCollisionGroup()
     ent:SetCollisionGroup(COLLISION_GROUP_PASSABLE_DOOR)
     self.PullTarget = ent
-    self:EmitSound("physics/flesh/flesh_impact_bullet" .. math.random(1, 5) .. ".wav")
+    self:EmitSound("physics/plastic/plastic_box_impact_soft" .. math.random(1, 4) .. ".wav")
     net.Start("SpiderRope_HitPos")
     net.WriteBool(false)
     net.WriteVector(tr.HitPos)
@@ -297,7 +297,8 @@ function SWEP:EndPullProp()
 
         timer.Simple(1.0, function() if IsValid(ent) then ent:SetCollisionGroup(ent.collision_group) end end)
         self.PullTarget = nil
-        self:EmitSound("physics/flesh/flesh_squishy_impact_hard" .. math.random(1, 4) .. ".wav")
+        
+        self:EmitSound("physics/plastic/plastic_box_impact_soft" .. math.random(1, 4) .. ".wav")
         net.Start("SpiderRope_Clear")
         net.Broadcast()
     end

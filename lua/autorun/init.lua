@@ -15,7 +15,7 @@ if CLIENT then
             local wep = ply:GetActiveWeapon()
             if not IsValid(wep) then return end
             local class = wep:GetClass()
-            if class ~= "spiderman_swep" and class ~= "vr_spiderman_swep" then return end
+            if class ~= "spooderman_swep" and class ~= "vr_spooderman" then return end
             --print("[SpiderRope] Unified hook active for", class, g_VR and g_VR.active)
             if g_VR and g_VR.active then
                 for _, hand in ipairs({"left", "right"}) do
@@ -24,7 +24,7 @@ if CLIENT then
                     local startPos = hand == "right" and vrmod.GetRightHandPos() or vrmod.GetLeftHandPos()
                     local endPos = state.isSwinging and state.ropeEndPos or IsValid(state.pullTarget) and state.pullTarget:GetPos()
                     if endPos then
-                        render.SetMaterial(Material("cable/rope"))
+                        render.SetMaterial(Material("sprites/xbeam2"))
                         render.DrawBeam(startPos, endPos, 1, 0, 1, Color(255, 255, 255, 255))
                     end
                 end
@@ -42,7 +42,7 @@ if CLIENT then
                 if not IsValid(vm) then return end
                 local att = vm:GetAttachment(vm:LookupAttachment("muzzle") or 1)
                 if not att then return end
-                render.SetMaterial(Material("cable/rope"))
+                render.SetMaterial(Material("sprites/xbeam2"))
                 render.DrawBeam(att.Pos, endPos, 1, 0, 1, Color(255, 255, 255, 255))
             end
         end)
