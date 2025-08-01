@@ -244,8 +244,9 @@ function SWEP:StartPullProp(ply, hand)
     if state.isPullingProp then return end
     local tr = self:DoTrace(ply, hand)
     local ent = tr.Entity
+    --if ent == ply then return end
     if not tr.Hit or not IsValid(ent) then return end
-    if ent:IsNPC() then ent = vrmod.utils.SpawnPickupRagdoll(ent) end
+    if ent:IsNPC() then ent = vrmod.utils.SpawnPickupRagdoll(ply, ent) end
     if ent:GetClass() == "prop_ragdoll" then vrmod.utils.SetBoneMass(ent, 15, 0.5) end
     local phys = ent:GetPhysicsObject()
     if not IsValid(phys) or not phys:IsMoveable() then return end
