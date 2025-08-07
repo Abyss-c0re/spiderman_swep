@@ -10,6 +10,12 @@ if SERVER then
         vr_input_states[ply] = vr_input_states[ply] or {}
         vr_input_states[ply][action] = pressed
     end)
+
+    hook.Add("PlayerSwitchWeapon", "SpiderRope_ResetVRInputStates", function(ply, oldWep, newWep)
+        if IsValid(oldWep) and oldWep:GetClass() == "vr_spooderman" then
+            vr_input_states[ply] = nil -- Clear input states when switching away
+        end
+    end)
 end
 
 SWEP.Author = "Doom Slayer"
@@ -38,8 +44,7 @@ SWEP.Secondary = {
     Ammo = "none"
 }
 
-function SWEP:Initialize()
-    self.undroppable = true
+function SWEP:ResetHandStates()
     self.HandStates = {
         left = {
             isSwinging = false,
@@ -64,6 +69,11 @@ function SWEP:Initialize()
     }
 end
 
+function SWEP:Initialize()
+    self.undroppable = true
+    self:ResetHandStates()
+end
+
 function SWEP:CleanupAllWebStates()
     for _, hand in ipairs({"left", "right"}) do
         self:EndSwing(hand)
@@ -71,13 +81,20 @@ function SWEP:CleanupAllWebStates()
     end
 end
 
+function SWEP:Equip()
+    self:CleanupAllWebStates()
+    self:ResetHandStates()
+end
+
 function SWEP:Holster()
     self:CleanupAllWebStates()
+    self:ResetHandStates()
     return true
 end
 
 function SWEP:OnRemove()
     self:CleanupAllWebStates()
+    self:ResetHandStates()
 end
 
 function SWEP:Think()
